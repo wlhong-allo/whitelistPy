@@ -8,6 +8,7 @@ import pandas as pd
 import os
 from validator import *
 import asyncio
+import os
 
 GUILD_TEMPLATE = {
     'whitelist_channel': None,
@@ -210,12 +211,11 @@ class WhitelistClient(discord.Client):
 
 
 if __name__ == '__main__':
-    with open('key', 'r') as in_file:
-        key = in_file.read()
+    access_token = os.environ["ACCESS_TOKEN"]
     try:
         with open('data.json', 'r') as data_file:
             data = json.load(data_file)
     except FileNotFoundError:
         data = {}
     client = WhitelistClient(data)
-    client.run(key)
+    client.run(access_token)
