@@ -1,2 +1,6 @@
 discord
+json
+regex
+pandas
+os
 asyncio

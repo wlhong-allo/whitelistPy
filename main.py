@@ -8,7 +8,6 @@ import pandas as pd
 import os
 from validator import *
 import asyncio
-import os
 
 GUILD_TEMPLATE = {
     'whitelist_channel': None,
