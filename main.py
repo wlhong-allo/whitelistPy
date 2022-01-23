@@ -158,7 +158,7 @@ class WhitelistClient(discord.Client):
         Args:
             message (discord.Message): The discord message that sent the request.
         """
-        self.data[str(message.guild.id)] = GUILD_TEMPLATE
+        self.data[str(message.guild.id)] = GUILD_TEMPLATE.copy()
         await message.reply("Server's data and config has been cleared.")
 
     async def help(self, message: discord.Message) -> None:
@@ -190,6 +190,7 @@ class WhitelistClient(discord.Client):
             if command in self.commands.keys():
                 try:
                     await self.commands[command](message)
+                    self.backup_data()
                 except InvalidCommand:
                     await message.reply("Invalid command argument.", mention_author=True)
             else:
@@ -207,6 +208,16 @@ class WhitelistClient(discord.Client):
                 self.backup_data()
             else:
                 await message.reply(f"The address `{message.content}` is invalid.")
+    
+    async def on_guild_join(self, guild: discord.Guild) -> None:
+        """ Initialises a server when the bot joins
+
+        Args:
+            guild (discord.Guild): The guild that the server has joined
+        
+        """
+        if str(guild.id) not in self.data:
+            self.data[str(guild.id)] = GUILD_TEMPLATE.copy()
 
 
 if __name__ == '__main__':

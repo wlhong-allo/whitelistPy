@@ -1,6 +1,7 @@
 # Keep key from being commited
 key
 data.json
+*.csv
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
