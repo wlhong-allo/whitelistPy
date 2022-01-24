@@ -27,6 +27,6 @@ To run your own instance of this bot:
 1. Install python 3.7+
 2. `cd` into the directory and run `python -m pip install -r requirements.txt`
 3. Set the `ACCESS_TOKEN` environment variable:
- - If you're on linux or mac: `export ACCESS_TOKEN=<your discord application access token here>`
- - If you're on windows: `$Env:ACCESS_TOKEN = "<your discord application access token here>"`
+    - If you're on linux or mac: `export ACCESS_TOKEN=<your discord application access token here>`
+    - If you're on windows: `$Env:ACCESS_TOKEN = "<your discord application access token here>"`
 4. `python main.py`

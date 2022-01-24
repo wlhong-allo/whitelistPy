@@ -180,34 +180,41 @@ class WhitelistClient(discord.Client):
         Args:
             message (discord.Message): The discord message that sent the request.
         """
-        # we do not want the bot to reply to itself
-        if message.author.id == self.user.id:
-            return
+        
+        try:
+            # we do not want the bot to reply to itself
+            if message.author.bot or not isinstance(message.author, discord.member.Member):
+                return
 
-        # Handle commands
-        if message.author.guild_permissions.administrator and message.content.startswith(">"):
-            command = message.content.split()[0][1:]
-            if command in self.commands.keys():
-                try:
-                    await self.commands[command](message)
+            # Handle commands
+            if message.author.guild_permissions.administrator and message.content.startswith(">"):
+                print(f"Admin command (from {message.author.id}): {message.content}")
+                command = message.content.split()[0][1:]
+                if command in self.commands.keys():
+                    try:
+                        await self.commands[command](message)
+                        self.backup_data()
+                    except InvalidCommand:
+                        await message.reply("Invalid command argument.", mention_author=True)
+                else:
+                    await message.reply(f"Valid commands are: `{list(self.commands.keys())}`")
+
+            # Handle whitelist additions
+            if (message.channel.id == self.data[str(message.guild.id)]['whitelist_channel']
+                and (self.data[str(message.guild.id)]['whitelist_role']
+                    in map(lambda x: x.id, message.author.roles))) and not message.content.startswith(">"):
+                if self.validators[self.data[str(message.guild.id)]['blockchain']](message.content):
+                    self.data[str(message.guild.id)]['data'][str(
+                        message.author.id)] = message.content
+                    await message.reply(
+                        f"Your wallet `{message.content}` has been validated and recorded.", mention_author=True)
                     self.backup_data()
-                except InvalidCommand:
-                    await message.reply("Invalid command argument.", mention_author=True)
-            else:
-                await message.reply(f"Valid commands are: `{list(self.commands.keys())}`")
-
-        # Handle whitelist additions
-        if (message.channel.id == self.data[str(message.guild.id)]['whitelist_channel']
-            and (self.data[str(message.guild.id)]['whitelist_role']
-                 in map(lambda x: x.id, message.author.roles))) and not message.content.startswith(">"):
-            if self.validators[self.data[str(message.guild.id)]['blockchain']](message.content):
-                self.data[str(message.guild.id)]['data'][str(
-                    message.author.id)] = message.content
-                await message.reply(
-                    f"Your wallet `{message.content}` has been validated and recorded.", mention_author=True)
-                self.backup_data()
-            else:
-                await message.reply(f"The address `{message.content}` is invalid.")
+                else:
+                    await message.reply(f"The address `{message.content}` is invalid.")
+        except Exception as e:
+            exception_string = str(e).replace('\n','---')
+            with open('log.txt', 'a+') as log:
+                log.write(f"Error: {exception_string}\n   Message: {str(message)}\n   Content: {str(message.content)}\n\n")
     
     async def on_guild_join(self, guild: discord.Guild) -> None:
         """ Initialises a server when the bot joins
