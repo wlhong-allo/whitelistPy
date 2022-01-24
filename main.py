@@ -1,13 +1,9 @@
 import discord
 import json
-from discord import mentions
-from discord import guild
-from discord import file
 import regex as re
-import pandas as pd
 import os
 from validator import *
-import asyncio
+from copy import deepcopy
 
 GUILD_TEMPLATE = {
     'whitelist_channel': None,
@@ -57,6 +53,10 @@ class WhitelistClient(discord.Client):
             'role': re.compile(">role <@&\d+>$"),
             'blockchain': re.compile(">blockchain \w{3}")
         }
+    
+    def _log(self, head : str, text : str) -> None:
+        with open('log.txt', 'a+') as log:
+            log.write(f"Head: {head}\n   Text: {str(text)}\n\n")
 
     def backup_data(self) -> None:
         with open('data.json', 'w+') as out_file:
@@ -70,7 +70,7 @@ class WhitelistClient(discord.Client):
         async for guild in self.fetch_guilds():
             if str(guild.id) not in self.data.keys():
                 print(f"Adding guild '{str(guild)}' to data.")
-                data[str(guild.id)] = GUILD_TEMPLATE.copy()
+                data[str(guild.id)] = deepcopy(GUILD_TEMPLATE)
         print("-------------")
 
     async def set_whitelist_channel(self, message: discord.Message) -> None:
@@ -158,7 +158,7 @@ class WhitelistClient(discord.Client):
         Args:
             message (discord.Message): The discord message that sent the request.
         """
-        self.data[str(message.guild.id)] = GUILD_TEMPLATE.copy()
+        self.data[str(message.guild.id)] = deepcopy(GUILD_TEMPLATE)
         await message.reply("Server's data and config has been cleared.")
 
     async def help(self, message: discord.Message) -> None:
@@ -213,8 +213,7 @@ class WhitelistClient(discord.Client):
                     await message.reply(f"The address `{message.content}` is invalid.")
         except Exception as e:
             exception_string = str(e).replace('\n','---')
-            with open('log.txt', 'a+') as log:
-                log.write(f"Error: {exception_string}\n   Message: {str(message)}\n   Content: {str(message.content)}\n\n")
+            self._log(exception_string, f"{message}\nContent:   {message.content}")
     
     async def on_guild_join(self, guild: discord.Guild) -> None:
         """ Initialises a server when the bot joins
@@ -224,7 +223,10 @@ class WhitelistClient(discord.Client):
         
         """
         if str(guild.id) not in self.data:
-            self.data[str(guild.id)] = GUILD_TEMPLATE.copy()
+            self.data[str(guild.id)] = deepcopy(GUILD_TEMPLATE)
+        
+        self._log("New Guild", f"{guild.id}, {guild.name}")
+        
 
 
 if __name__ == '__main__':
