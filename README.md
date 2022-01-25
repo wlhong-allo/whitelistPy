@@ -19,7 +19,11 @@ Note: you must be administrator to be able to access commands.
 
 **>clear**: Clear the config and data for this server.
 
-**>help**: This screen.
+**>check**: Checks whether your wallet has been recorded in the whitelist.
+
+**>help**: A help screen for users.
+
+**>help.admin**: A help screen for admins.
 
 ## USAGE
 
