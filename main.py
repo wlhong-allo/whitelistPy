@@ -3,6 +3,7 @@ import json
 import regex as re
 import os
 from validator import *
+import traceback
 from copy import deepcopy
 
 GUILD_TEMPLATE = {
@@ -35,14 +36,18 @@ class WhitelistClient(discord.Client):
         """
         super().__init__(loop=loop, **options)
         self.data = data
-        self.commands = {
+        self.admin_commands = {
             'channel': self.set_whitelist_channel,
             'role': self.set_whitelist_role,
             'blockchain': self.set_blockchain,
             'data': self.get_data,
             'config': self.get_config,
             'clear': self.clear_data,
-            'help': self.help
+            'help.admin': self.help_admin
+        }
+        self.public_commands = {
+            'help': self.help,
+            'check': self.check
         }
         self.validators = {
             'eth': validate_eth,
@@ -161,6 +166,19 @@ class WhitelistClient(discord.Client):
         self.data[str(message.guild.id)] = deepcopy(GUILD_TEMPLATE)
         await message.reply("Server's data and config has been cleared.")
 
+    async def help_admin(self, message: discord.Message) -> None:
+        """ Returns a window that provides some help messages regarding how to use the bot for an admin.
+
+        Args:
+            message (discord.Message): The discord message that sent the request.
+        """
+        msg = discord.Embed(title="Whitelist Manager Help (Admin)")
+        desc = "Whitelist Manager is a bot designed to assist you in gathering wallet addresses for NFT drops.\nAfter configuring the discord bot, users who are 'whitelisted' will be able to record their crypto addresses which you can then download as a CSV.\nNote, the `config` must be filled out before the bot will work."
+        body = "`>channel #channelName`: Sets the channel to listen for wallet addresses on.\n`>role @roleName`: Sets the role a user must possess to be able to add their address to the whitelist.\n`>blockchain eth/sol`: Select which blockchain this NFT drop will occur on, this allows for validation of the addresses that are added.\n`>config`: View the current server config.\n`>data`: Get discordID:walletAddress pairs in a CSV format.\n`>clear`: Clear the config and data for this server.\n`>help.admin`: This screen.\n`>help`: How to use help screen."
+        msg.description = desc
+        msg.add_field(name="COMMANDS", value=body)
+        await message.reply(embed=msg)
+    
     async def help(self, message: discord.Message) -> None:
         """ Returns a window that provides some help messages regarding how to use the bot.
 
@@ -168,11 +186,18 @@ class WhitelistClient(discord.Client):
             message (discord.Message): The discord message that sent the request.
         """
         msg = discord.Embed(title="Whitelist Manager Help")
-        desc = "Whitelist Manager is a bot designed to assist you in gathering wallet addresses for NFT drops.\nAfter configuring the discord bot, users who are 'whitelisted' will be able to record their crypto addresses which you can then download as a CSV.\nNote, the `config` must be filled out before the bot will work."
-        body = "`>channel #channelName`: Sets the channel to listen for wallet addresses on.\n`>role @roleName`: Sets the role a user must possess to be able to add their address to the whitelist.\n`>blockchain eth/sol`: Select which blockchain this NFT drop will occur on, this allows for validation of the addresses that are added.\n`>config`: View the current server config.\n`>data`: Get discordID:walletAddress pairs in a CSV format.\n`>clear`: Clear the config and data for this server.\n`>help`: This screen."
+        desc = "Whitelist Manager is a bot designed to assist in gathering wallet addresses for NFT drops."
+        body = "`>check`: will tell you whether or not your wallet has been recorded in the whitelist\n`>help`: This screen\n`>help.admin`: Provides a help screen to assist in configuring the bot (admin only).\n\nHow to use: Send your wallet address to the whitelist chat to record it!\nThe message should contain just the wallet address (no `>`)."
         msg.description = desc
         msg.add_field(name="COMMANDS", value=body)
         await message.reply(embed=msg)
+    
+    async def check(self, message: discord.Message) -> None:
+        guild_id = str(message.guild.id)
+        if str(message.author.id) in self.data[guild_id]['data']:
+            await message.reply(f"You are whitelisted! Address: `{self.data[guild_id]['data'][str(message.author.id)]}`")
+        else:
+            await message.reply(f"Your wallet is not yet on the whitelist. Use `>help` for more info!.")
 
     async def on_message(self, message: discord.Message) -> None:
         """ Responds to the 'on_message' event. Runs the appropriate commands given the user has valid privellages.
@@ -190,14 +215,26 @@ class WhitelistClient(discord.Client):
             if message.author.guild_permissions.administrator and message.content.startswith(">"):
                 print(f"Admin command (from {message.author.id}): {message.content}")
                 command = message.content.split()[0][1:]
-                if command in self.commands.keys():
+                if command in self.admin_commands.keys():
                     try:
-                        await self.commands[command](message)
+                        await self.admin_commands[command](message)
                         self.backup_data()
+                        return
+                    except InvalidCommand:
+                        await message.reply("Invalid command argument.", mention_author=True)
+            
+            if message.content.startswith('>'):
+                print(f"User command from {message.author.id}: {message.content}")
+                command = message.content.split()[0][1:]
+                if command in self.public_commands.keys():
+                    try:
+                        await self.public_commands[command](message)
+                        return
                     except InvalidCommand:
                         await message.reply("Invalid command argument.", mention_author=True)
                 else:
-                    await message.reply(f"Valid commands are: `{list(self.commands.keys())}`")
+                    commands = str(list(self.public_commands.keys()))[1:-1].replace("'","`")
+                    await message.reply(f'Valid commands are: {commands}, use `>help` for more info.')
 
             # Handle whitelist additions
             if (message.channel.id == self.data[str(message.guild.id)]['whitelist_channel']
@@ -211,8 +248,9 @@ class WhitelistClient(discord.Client):
                     self.backup_data()
                 else:
                     await message.reply(f"The address `{message.content}` is invalid.")
-        except Exception as e:
-            exception_string = str(e).replace('\n','---')
+        except Exception:
+            tb = traceback.format_exc()
+            exception_string = tb.replace('\n','---')
             self._log(exception_string, f"{message}\nContent:   {message.content}")
     
     async def on_guild_join(self, guild: discord.Guild) -> None:
