@@ -4,6 +4,9 @@ Whitelist Manager is a discord bot designed to assist you in gathering wallet ad
 After configuring the discord bot, users who are 'whitelisted' will be able to record their crypto addresses which you can then download as a CSV.
 Note, the config must be filled out before the bot will work.
 
+## Invite link
+Here is a link to the top.gg page and public instance if you want to use this on your server: [Top.GG](https://top.gg/bot/911822691680526357)
+
 ## COMMANDS
 Note: you must be administrator to be able to access commands.
 
