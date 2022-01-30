@@ -3,7 +3,7 @@ from Crypto.Hash import keccak
 
 non_checksummed_patterns = (re.compile(
     "^(0x)?[0-9a-f]{40}$"), re.compile("^(0x)?[0-9A-F]{40}$"))
-sol_pattern = re.compile('[0-9a-zA-Z]{44}$')
+sol_pattern = re.compile('[0-9a-zA-Z]{32,44}$')
 
 
 def validate_eth(addr: str) -> bool:
