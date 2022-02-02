@@ -139,7 +139,7 @@ class WhitelistClient(discord.Client):
                 "UPDATE discord_server SET blockchain = ? WHERE id = ?", (code, message.guild.id))
             self.db.commit()
 
-            await message.reply(f"Successfully set blockchain to {code}", mention_author=True)
+            await message.reply(f"Successfully set blockchain to `{code}`", mention_author=True)
         else:
             raise InvalidCommand()
 
@@ -249,23 +249,24 @@ class WhitelistClient(discord.Client):
                     except InvalidCommand:
                         await message.reply("Invalid command argument.", mention_author=True)
 
-            if message.content.startswith('>'):
-                command = message.content.split()[0][1:]
-                if command in self.public_commands.keys():
-                    try:
-                        await self.public_commands[command](message)
-                        return
-                    except InvalidCommand:
-                        await message.reply("Invalid command argument.", mention_author=True)
-                else:
-                    commands = str(list(self.public_commands.keys()))[
-                        1:-1].replace("'", "`")
-                    await message.reply(f'Valid commands are: {commands}, use `>help` for more info.')
-
             # Handle whitelist additions
             server = self.db.execute(
                 "SELECT * FROM discord_server WHERE id =?", (message.guild.id,)).fetchone()
-            if (message.channel.id == server["whitelist_channel"] and server["whitelist_role"] in map(lambda x: x.id, message.author.roles)) and not message.content.startswith(">"):
+            if (message.channel.id == server["whitelist_channel"] and server["whitelist_role"] in map(lambda x: x.id, message.author.roles)):
+                if message.content.startswith('>'):
+                    command = message.content.split()[0][1:]
+                    if command in self.public_commands.keys():
+                        try:
+                            await self.public_commands[command](message)
+                            return
+                        except InvalidCommand:
+                            await message.reply("Invalid command argument.", mention_author=True)
+                    else:
+                        commands = str(list(self.public_commands.keys()))[
+                            1:-1].replace("'", "`")
+                        await message.reply(f'Valid commands are: {commands}, use `>help` for more info.')
+                    return
+                
                 if server["blockchain"] is None: return
 
                 if self.validators[server["blockchain"]](message.content):
