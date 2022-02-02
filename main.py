@@ -1,9 +1,11 @@
+import sqlite3
 import discord
 import json
 import regex as re
 import os
 from validator import *
 import traceback
+from db import DB
 from copy import deepcopy
 
 GUILD_TEMPLATE = {
@@ -29,13 +31,14 @@ class WhitelistClient(discord.Client):
     The discord client which manages all guilds and corrosponding data
     """
 
-    def __init__(self, data, *, loop=None, **options):
+    def __init__(self, db: DB, *, loop=None, **options):
         """
         Args:
             data (dict): A data dictionary stored in memory.
         """
         super().__init__(loop=loop, **options)
-        self.data = data
+        self.db = db
+        self.data = {}
         self.admin_commands = {
             'channel': self.set_whitelist_channel,
             'role': self.set_whitelist_role,
@@ -58,8 +61,8 @@ class WhitelistClient(discord.Client):
             'role': re.compile(">role <@&\d+>$"),
             'blockchain': re.compile(">blockchain \w{3}")
         }
-    
-    def _log(self, head : str, text : str) -> None:
+
+    def _log(self, head: str, text: str) -> None:
         with open('log.txt', 'a+') as log:
             log.write(f"Head: {head}\n   Text: {str(text)}\n\n")
 
@@ -73,9 +76,11 @@ class WhitelistClient(discord.Client):
         print(self.user.id)
         print("Initialising...")
         async for guild in self.fetch_guilds():
-            if str(guild.id) not in self.data.keys():
-                print(f"Adding guild '{str(guild)}' to data.")
-                data[str(guild.id)] = deepcopy(GUILD_TEMPLATE)
+            if self.db.execute('SELECT * FROM discord_server WHERE id=?', (guild.id,)).fetchone() is None:
+                print(f"Adding guild '{str(guild)}' to database.")
+                self.db.execute(
+                    "INSERT INTO discord_server VALUES (?,?,?,?)", (guild.id, None, None, None))
+                self.db.commit()
         print("-------------")
 
     async def set_whitelist_channel(self, message: discord.Message) -> None:
@@ -90,7 +95,11 @@ class WhitelistClient(discord.Client):
         channels = message.channel_mentions
         if len(channels) != 1 or not self.regex['channel'].fullmatch(message.content):
             raise InvalidCommand()
-        self.data[str(message.guild.id)]['whitelist_channel'] = channels[0].id
+
+        self.db.execute("UPDATE discord_server SET whitelist_channel = ? WHERE id = ?",
+                        (channels[0].id, message.guild.id))
+        self.db.commit()
+
         await message.reply(f"Successfully set whitelist channel to <#{channels[0].id}>",
                             mention_author=True)
 
@@ -106,7 +115,11 @@ class WhitelistClient(discord.Client):
         roles = message.role_mentions
         if len(roles) != 1 or not self.regex['role'].fullmatch(message.content):
             raise InvalidCommand()
-        self.data[str(message.guild.id)]['whitelist_role'] = roles[0].id
+
+        self.db.execute("UPDATE discord_server SET whitelist_role = ? WHERE id = ?",
+                        (roles[0].id, message.guild.id))
+        self.db.commit()
+
         await message.reply(f"Successfully set whitelist role to <@&{roles[0].id}>",
                             mention_author=True)
 
@@ -121,9 +134,12 @@ class WhitelistClient(discord.Client):
         """
         code = message.content[-3:]
         if code in VALID_BLOCKCHAINS:
-            self.data[str(message.guild.id)]['blockchain'] = code
-            await message.reply(f"Successfully set blockchain to {code}",
-                                mention_author=True)
+
+            self.db.execute(
+                "UPDATE discord_server SET blockchain = ? WHERE id = ?", (code, message.guild.id))
+            self.db.commit()
+
+            await message.reply(f"Successfully set blockchain to {code}", mention_author=True)
         else:
             raise InvalidCommand()
 
@@ -133,12 +149,18 @@ class WhitelistClient(discord.Client):
         Args:
             message (discord.Message): The discord message that sent the request.
         """
-        channelID = self.data[str(message.guild.id)]['whitelist_channel']
-        roleID = self.data[str(message.guild.id)]['whitelist_role']
-        blockchain = self.data[str(message.guild.id)]['blockchain']
-        replyStr = f"Whitelist Channel: <#{channelID}>\nWhitelist Role: <@&{roleID}>\nBlockchain: {blockchain}"
+        row = self.db.execute(
+            "SELECT * FROM discord_server WHERE id = ?", (message.guild.id,)).fetchone()
+        if row is None:
+            return
+        replyStr = f"""
+        Whitelist Channel: {"None" if row["whitelist_channel"] is None else f"<#{row['whitelist_channel']}>"}
+        Whitelist Role: {"None" if row["whitelist_role"] is None else f"<@&{row['whitelist_role']}>"}
+        Blockchain: {row['blockchain']}
+        """
         reply = discord.Embed(
             title=f'Config for {message.guild}', description=replyStr)
+
         await message.reply(embed=reply, mention_author=True)
 
     async def get_data(self, message: discord.Message) -> None:
@@ -151,7 +173,7 @@ class WhitelistClient(discord.Client):
         with open(file_name, 'w+') as out_file:
             out_file.write('userId, walletAddress\n')
             out_file.writelines(
-                map(lambda t: f"{t[0]},{t[1]}\n", self.data[str(message.guild.id)]['data'].items()))
+                map(lambda t: f"{t['id']},{t['wallet']}\n", self.db.execute("SELECT id, wallet FROM user WHERE discord_server = ?", (message.guild.id,)).fetchall()))
             out_file.flush()
         await message.reply('Data for server is attached.',
                             file=discord.File(file_name))
@@ -163,8 +185,12 @@ class WhitelistClient(discord.Client):
         Args:
             message (discord.Message): The discord message that sent the request.
         """
-        self.data[str(message.guild.id)] = deepcopy(GUILD_TEMPLATE)
-        await message.reply("Server's data and config has been cleared.")
+        self.db.execute(
+            "DELETE FROM discord_server WHERE id = ?", (message.guild.id,))
+        self.db.execute("INSERT INTO discord_server VALUES (?,?,?,?)",
+                        (message.guild.id, None, None, None))
+        self.db.commit()
+        await message.reply("Server's data has been cleared.")
 
     async def help_admin(self, message: discord.Message) -> None:
         """ Returns a window that provides some help messages regarding how to use the bot for an admin.
@@ -178,7 +204,7 @@ class WhitelistClient(discord.Client):
         msg.description = desc
         msg.add_field(name="COMMANDS", value=body)
         await message.reply(embed=msg)
-    
+
     async def help(self, message: discord.Message) -> None:
         """ Returns a window that provides some help messages regarding how to use the bot.
 
@@ -191,11 +217,12 @@ class WhitelistClient(discord.Client):
         msg.description = desc
         msg.add_field(name="COMMANDS", value=body)
         await message.reply(embed=msg)
-    
+
     async def check(self, message: discord.Message) -> None:
-        guild_id = str(message.guild.id)
-        if str(message.author.id) in self.data[guild_id]['data']:
-            await message.reply(f"You are whitelisted! Address: `{self.data[guild_id]['data'][str(message.author.id)]}`")
+        row = db.execute("SELECT * FROM user WHERE id = ? AND discord_server = ?",
+                         (message.author.id, message.guild.id)).fetchone()
+        if row is not None:
+            await message.reply(f"You are whitelisted! Address: `{row['wallet']}`")
         else:
             await message.reply(f"Your wallet is not yet on the whitelist. Use `>help` for more info!.")
 
@@ -205,7 +232,7 @@ class WhitelistClient(discord.Client):
         Args:
             message (discord.Message): The discord message that sent the request.
         """
-        
+
         try:
             # we do not want the bot to reply to itself
             if message.author.bot or not isinstance(message.author, discord.member.Member):
@@ -213,7 +240,6 @@ class WhitelistClient(discord.Client):
 
             # Handle commands
             if message.author.guild_permissions.administrator and message.content.startswith(">"):
-                print(f"Admin command (from {message.author.id}): {message.content}")
                 command = message.content.split()[0][1:]
                 if command in self.admin_commands.keys():
                     try:
@@ -222,9 +248,8 @@ class WhitelistClient(discord.Client):
                         return
                     except InvalidCommand:
                         await message.reply("Invalid command argument.", mention_author=True)
-            
+
             if message.content.startswith('>'):
-                print(f"User command from {message.author.id}: {message.content}")
                 command = message.content.split()[0][1:]
                 if command in self.public_commands.keys():
                     try:
@@ -233,16 +258,20 @@ class WhitelistClient(discord.Client):
                     except InvalidCommand:
                         await message.reply("Invalid command argument.", mention_author=True)
                 else:
-                    commands = str(list(self.public_commands.keys()))[1:-1].replace("'","`")
+                    commands = str(list(self.public_commands.keys()))[
+                        1:-1].replace("'", "`")
                     await message.reply(f'Valid commands are: {commands}, use `>help` for more info.')
 
             # Handle whitelist additions
-            if (message.channel.id == self.data[str(message.guild.id)]['whitelist_channel']
-                and (self.data[str(message.guild.id)]['whitelist_role']
-                    in map(lambda x: x.id, message.author.roles))) and not message.content.startswith(">"):
-                if self.validators[self.data[str(message.guild.id)]['blockchain']](message.content):
-                    self.data[str(message.guild.id)]['data'][str(
-                        message.author.id)] = message.content
+            server = self.db.execute(
+                "SELECT * FROM discord_server WHERE id =?", (message.guild.id,)).fetchone()
+            if (message.channel.id == server["whitelist_channel"] and server["whitelist_role"] in map(lambda x: x.id, message.author.roles)) and not message.content.startswith(">"):
+                if server["blockchain"] is None: return
+
+                if self.validators[server["blockchain"]](message.content):
+                    db.execute("DELETE FROM user WHERE id = ? and discord_server = ?", (message.author.id, message.guild.id))
+                    db.execute("INSERT INTO user (id, discord_server, wallet) VALUES (?, ?, ?)", (message.author.id, message.guild.id, message.content))
+                    db.commit()
                     await message.reply(
                         f"Your wallet `{message.content}` has been validated and recorded.", mention_author=True)
                     self.backup_data()
@@ -250,29 +279,26 @@ class WhitelistClient(discord.Client):
                     await message.reply(f"The address `{message.content}` is invalid.")
         except Exception:
             tb = traceback.format_exc()
-            exception_string = tb.replace('\n','---')
-            self._log(exception_string, f"{message}\nContent:   {message.content}")
-    
+            exception_string = tb.replace('\n', '---')
+            self._log(exception_string,
+                      f"{message}\nContent:   {message.content}")
+
     async def on_guild_join(self, guild: discord.Guild) -> None:
         """ Initialises a server when the bot joins
 
         Args:
             guild (discord.Guild): The guild that the server has joined
-        
+
         """
-        if str(guild.id) not in self.data:
-            self.data[str(guild.id)] = deepcopy(GUILD_TEMPLATE)
-        
+        if db.execute("SELECT * FROM discord_server WHERE id=?", (guild.id,)).fetchone() is None:
+            db.execute("INSERT INTO discord_server VALUES (?,?,?,?)", (guild.id, None, None, None))
+            db.commit()
+
         self._log("New Guild", f"{guild.id}, {guild.name}")
-        
 
 
 if __name__ == '__main__':
     access_token = os.environ["ACCESS_TOKEN"]
-    try:
-        with open('data.json', 'r') as data_file:
-            data = json.load(data_file)
-    except FileNotFoundError:
-        data = {}
-    client = WhitelistClient(data)
+    db = DB('data.db')
+    client = WhitelistClient(db)
     client.run(access_token)
