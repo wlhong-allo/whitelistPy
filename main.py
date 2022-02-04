@@ -66,10 +66,6 @@ class WhitelistClient(discord.Client):
         with open('log.txt', 'a+') as log:
             log.write(f"Head: {head}\n   Text: {str(text)}\n\n")
 
-    def backup_data(self) -> None:
-        with open('data.json', 'w+') as out_file:
-            json.dump(self.data, out_file)
-
     async def on_ready(self) -> None:
         print('Logged in as')
         print(self.user.name)
@@ -222,7 +218,7 @@ class WhitelistClient(discord.Client):
         row = db.execute("SELECT * FROM user WHERE id = ? AND discord_server = ?",
                          (message.author.id, message.guild.id)).fetchone()
         if row is not None:
-            await message.reply(f"You are whitelisted! Address: `{row['wallet']}`")
+            await message.reply(f"You are whitelisted! Address, the last 3 digits of your wallet are: `{row['wallet'][-3:]}`")
         else:
             await message.reply(f"Your wallet is not yet on the whitelist. Use `>help` for more info!.")
 
@@ -244,10 +240,17 @@ class WhitelistClient(discord.Client):
                 if command in self.admin_commands.keys():
                     try:
                         await self.admin_commands[command](message)
-                        self.backup_data()
                         return
                     except InvalidCommand:
                         await message.reply("Invalid command argument.", mention_author=True)
+                    return
+                if command in self.public_commands.keys():
+                    try:
+                        await self.public_commands[command](message)
+                        return
+                    except InvalidCommand:
+                        await message.reply("Invalid command argument.", mention_author=True)
+                    return
 
             # Handle whitelist additions
             server = self.db.execute(
@@ -274,10 +277,11 @@ class WhitelistClient(discord.Client):
                     db.execute("INSERT INTO user (id, discord_server, wallet) VALUES (?, ?, ?)", (message.author.id, message.guild.id, message.content))
                     db.commit()
                     await message.reply(
-                        f"Your wallet `{message.content}` has been validated and recorded.", mention_author=True)
-                    self.backup_data()
+                        f"<@{message.author.id}> your wallet ending in `{message.content[-3:]}` has been validated and recorded.", mention_author=True)
                 else:
-                    await message.reply(f"The address `{message.content}` is invalid.")
+                    await message.reply(f"The address ending in `{message.content[-3:]}` is invalid.")
+                
+                await message.delete()
         except Exception:
             tb = traceback.format_exc()
             exception_string = tb.replace('\n', '---')
