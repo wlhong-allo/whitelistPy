@@ -218,7 +218,7 @@ class WhitelistClient(discord.Client):
         row = db.execute("SELECT * FROM user WHERE id = ? AND discord_server = ?",
                          (message.author.id, message.guild.id)).fetchone()
         if row is not None:
-            await message.reply(f"You are whitelisted! Address, the last 3 digits of your wallet are: `{row['wallet'][-3:]}`")
+            await message.reply(f"You are whitelisted! The last 3 digits of your wallet are: `{row['wallet'][-3:]}`")
         else:
             await message.reply(f"Your wallet is not yet on the whitelist. Use `>help` for more info!.")
 
