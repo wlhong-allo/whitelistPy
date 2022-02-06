@@ -4,7 +4,7 @@ This file migrates the old json-format of backend data to the new sqlite format.
 This is to not lose old data and maintain consistency in the DB
 """
 
-from db import DB
+from ..db import DB
 import json
 
 NEW_DB_NAME = "new_data.db"
