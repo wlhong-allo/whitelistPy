@@ -4,6 +4,7 @@ from Crypto.Hash import keccak
 non_checksummed_patterns = (re.compile(
     "^(0x)?[0-9a-f]{40}$"), re.compile("^(0x)?[0-9A-F]{40}$"))
 sol_pattern = re.compile('[0-9a-zA-Z]{32,44}$')
+ada_pattern = re.compile('^[a-z0-9A-Z]+$')
 
 
 def validate_eth(addr: str) -> bool:
@@ -43,4 +44,10 @@ def validate_sol(addr: str) -> bool:
     Returns:
         bool: True if the address is valid, false otherwise.
     """
-    return sol_pattern.fullmatch(addr)
+    return sol_pattern.fullmatch(addr) is not None
+
+def validate_ada(addr : str) -> bool:
+    if addr.startswith('addr1') or addr.startswith('Ae2') or addr.startswith('DdzFF'):
+        return ada_pattern.fullmatch(addr) is not None
+    return False
+
