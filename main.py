@@ -34,7 +34,7 @@ class WhitelistClient(discord.Client):
             'channel': self.set_whitelist_channel,
             'role': self.set_whitelist_role,
             'blockchain': self.set_blockchain,
-            'data': self.get_data,
+            'data-yslb-321123': self.get_data,
             'config': self.get_config,
             'clear': self.clear_data,
             'help.admin': self.help_admin
