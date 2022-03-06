@@ -188,7 +188,7 @@ class WhitelistClient(discord.Client):
         """
         msg = discord.Embed(title="Whitelist Manager Help (Admin)")
         desc = "Whitelist Manager is a bot designed to assist you in gathering wallet addresses for NFT drops.\nAfter configuring the discord bot, users who are 'whitelisted' will be able to record their crypto addresses which you can then download as a CSV.\nNote, the `config` must be filled out before the bot will work."
-        body = "`>channel #channelName`: Sets the channel to listen for wallet addresses on.\n`>role @roleName`: Sets the role a user must possess to be able to add their address to the whitelist.\n`>blockchain eth/sol/ada`: Select which blockchain this NFT drop will occur on, this allows for validation of the addresses that are added.\n`>config`: View the current server config.\n`>data`: Get discordID:walletAddress pairs in a CSV format.\n`>clear`: Clear the config and data for this server.\n`>help.admin`: This screen.\n`>help`: How to use help screen."
+        body = "`>channel #channelName`: Sets the channel to listen for wallet addresses on.\n`>role @roleName`: Sets the role a user must possess to be able to add their address to the whitelist.\n`>blockchain eth/sol/ada`: Select which blockchain this NFT drop will occur on, this allows for validation of the addresses that are added.\n`>config`: View the current server config.\n`>data`: **disabled for security, check DB on server**.\n`>clear`: Clear the config and data for this server.\n`>help.admin`: This screen.\n`>help`: How to use help screen."
         msg.description = desc
         msg.add_field(name="COMMANDS", value=body)
         await message.reply(embed=msg)
